@@ -1,15 +1,19 @@
 // ==UserScript==
 // @name         Copy Video Link Loader
 // @namespace    https://github.com/noname-new
-// @version      1.0.0
-// @description  Loader for Copy Video Link
+// @version      1.1.0
+// @description  Copy Video Link Loader
 // @author       noname-new
 // @match        *://*/*
 // @run-at       document-start
 //
+// @grant        GM_getValue
+// @grant        GM_setValue
 // @grant        GM_xmlhttpRequest
 //
 // @connect      raw.githubusercontent.com
+// @connect      script.google.com
+// @connect      script.googleusercontent.com
 //
 // @noframes
 // ==/UserScript==
@@ -17,19 +21,10 @@
 (function () {
     'use strict';
 
-    // =========================================================
-    // CONFIG
-    // =========================================================
-
-    const SCRIPT_URLS = [
+    const URLS = [
         "https://raw.githubusercontent.com/noname-new/copy_video_link/refs/heads/main/main_obf.js",
         "https://raw.githubusercontent.com/noname-new/copy_video_link/refs/heads/main/copylink_obf.js"
     ];
-
-
-    // =========================================================
-    // CHỐNG LOAD 2 LẦN
-    // =========================================================
 
     if (window.__COPY_VIDEO_LINK_LOADER__) {
         return;
@@ -37,10 +32,6 @@
 
     window.__COPY_VIDEO_LINK_LOADER__ = true;
 
-
-    // =========================================================
-    // LOG
-    // =========================================================
 
     function log(...args) {
         console.log(
@@ -50,68 +41,15 @@
     }
 
 
-    function warn(...args) {
-        console.warn(
-            "[Copy Video Link Loader]",
-            ...args
-        );
-    }
-
-
-    function error(...args) {
-        console.error(
-            "[Copy Video Link Loader]",
-            ...args
-        );
-    }
-
-
-    // =========================================================
-    // KIỂM TRA CODE
-    // =========================================================
-
-    function isValid(code) {
+    function run(code, url) {
 
         if (
-            typeof code !== "string"
+            typeof code !== "string" ||
+            code.length < 100 ||
+            code.trim().startsWith("<")
         ) {
-            return false;
-        }
-
-        if (
-            code.length < 100
-        ) {
-            return false;
-        }
-
-        const text =
-            code.trim();
-
-        // GitHub trả HTML lỗi
-        if (
-            text.startsWith("<!DOCTYPE") ||
-            text.startsWith("<html") ||
-            text.startsWith("<HTML")
-        ) {
-            return false;
-        }
-
-        return true;
-    }
-
-
-    // =========================================================
-    // CHẠY SCRIPT
-    // =========================================================
-
-    function execute(code, url) {
-
-        if (
-            !isValid(code)
-        ) {
-
-            error(
-                "Invalid script:",
+            console.error(
+                "[Copy Video Link Loader] Invalid:",
                 url
             );
 
@@ -120,7 +58,18 @@
 
         try {
 
-            eval(code);
+            const fn = new Function(
+                "GM_getValue",
+                "GM_setValue",
+                "GM_xmlhttpRequest",
+                code
+            );
+
+            fn(
+                GM_getValue,
+                GM_setValue,
+                GM_xmlhttpRequest
+            );
 
             log(
                 "Executed:",
@@ -131,8 +80,8 @@
 
         } catch (e) {
 
-            error(
-                "Execution failed:",
+            console.error(
+                "[Copy Video Link Loader] Execution failed:",
                 url,
                 e
             );
@@ -142,145 +91,79 @@
     }
 
 
-    // =========================================================
-    // TẢI 1 SCRIPT
-    // =========================================================
+    function load(url) {
 
-    function loadScript(url) {
+        log(
+            "Downloading:",
+            url
+        );
 
-        return new Promise(function (resolve) {
+        GM_xmlhttpRequest({
 
-            log(
-                "Downloading:",
-                url
-            );
+            method: "GET",
 
-            GM_xmlhttpRequest({
+            url: url,
 
-                method: "GET",
+            timeout: 15000,
 
-                url: url,
+            headers: {
+                "Cache-Control": "no-cache"
+            },
 
-                timeout: 15000,
+            onload(response) {
 
-                headers: {
-                    "Cache-Control": "no-cache"
-                },
-
-                onload(response) {
-
-                    if (
-                        response.status !== 200
-                    ) {
-
-                        error(
-                            "HTTP",
-                            response.status,
-                            url
-                        );
-
-                        resolve(false);
-                        return;
-                    }
-
-
-                    const code =
-                        response.responseText || "";
-
-
-                    if (
-                        !isValid(code)
-                    ) {
-
-                        error(
-                            "Invalid response:",
-                            url
-                        );
-
-                        resolve(false);
-                        return;
-                    }
-
-
-                    const success =
-                        execute(
-                            code,
-                            url
-                        );
-
-
-                    resolve(success);
-                },
-
-
-                onerror(e) {
-
-                    error(
-                        "Network error:",
-                        url,
-                        e
-                    );
-
-                    resolve(false);
-                },
-
-
-                ontimeout() {
-
-                    error(
-                        "Timeout:",
+                if (
+                    response.status !== 200
+                ) {
+                    console.error(
+                        "[Copy Video Link Loader] HTTP:",
+                        response.status,
                         url
                     );
 
-                    resolve(false);
+                    return;
                 }
 
-            });
+                run(
+                    response.responseText,
+                    url
+                );
+            },
 
+            onerror(error) {
+
+                console.error(
+                    "[Copy Video Link Loader] Network error:",
+                    url,
+                    error
+                );
+            },
+
+            ontimeout() {
+
+                console.error(
+                    "[Copy Video Link Loader] Timeout:",
+                    url
+                );
+            }
         });
     }
 
 
-    // =========================================================
-    // LOAD 2 FILE
-    // =========================================================
-
+    // Chạy theo thứ tự
     async function main() {
 
-        log(
-            "Starting..."
-        );
-
+        log("Starting...");
 
         for (
-            const url of SCRIPT_URLS
+            const url of URLS
         ) {
-
-            const success =
-                await loadScript(url);
-
-
-            if (!success) {
-
-                warn(
-                    "Failed:",
-                    url
-                );
-
-            }
-
+            load(url);
         }
 
-
-        log(
-            "All scripts processed."
-        );
+        log("All scripts requested.");
     }
 
-
-    // =========================================================
-    // START
-    // =========================================================
 
     main();
 
