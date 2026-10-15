@@ -1,4 +1,3 @@
-// bản quyền noname cẩm deobf / giải mã hoặc sử dụng trái phép dưới bất kì hình thức nào
 /* PrimeVeil v1.0.8 | primeveil.com */
 "use strict";
 
